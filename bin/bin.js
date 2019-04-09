@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 //jshint esversion: 9
 const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
