@@ -1,6 +1,6 @@
 {
   "name": "puppeteer-kiosk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Wrapper around puppeteer for use in a systemd user service on a kiosk system",
   "main": "index.js",
   "bin": {
@@ -21,8 +21,7 @@
   },
   "homepage": "https://github.com/regular/puppeteer-kiosk#readme",
   "dependencies": {
-    "minimist": "^1.2.0",
-    "puppeteer": "^1.14.0"
+    "minimist": "^1.2.0"
   },
   "devDependencies": {
     "jshint": "^2.10.2"
