@@ -1,0 +1,30 @@
+{
+  "name": "puppeteer-kiosk",
+  "version": "1.0.0",
+  "description": "Wrapper around puppeteer for use in a systemd user service on a kiosk system",
+  "main": "index.js",
+  "bin": {
+    "puppeteer-kiosk": "bin/bin.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/regular/puppeteer-kiosk.git"
+  },
+  "keywords": [],
+  "author": "Jan Bölsche <jan@lagomorph.de> (https://regular.codes/)",
+  "license": "AGPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/regular/puppeteer-kiosk/issues"
+  },
+  "homepage": "https://github.com/regular/puppeteer-kiosk#readme",
+  "dependencies": {
+    "minimist": "^1.2.0",
+    "puppeteer": "^1.14.0"
+  },
+  "devDependencies": {
+    "jshint": "^2.10.2"
+  }
+}
