@@ -2,9 +2,10 @@
 //jshint esversion: 9
 const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
+const Log = require('puppeteer-log')
 
 const userDataDir = process.env.HOME + '/.config/chromium'
-const opacity = require('../opacity')({userDataDir})
+const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
 
 const URI = argv._[0] || 'about:blank'
 
@@ -13,6 +14,7 @@ const DEVTOOLS = 0
 ;(async () => {
   const args=[
     '--no-default-browser-check',
+    '--disable-features=InfiniteSessionRestore',
     '--no-first-run',
     '--autoplay-policy=no-user-gesture-required',
     '--disable-gesture-requirement-for-media-playback',
@@ -31,6 +33,10 @@ const DEVTOOLS = 0
     '--password-store=basic'
   ]
 
+  if (argv.sandbox == false) {
+    args.push('--no-sandbox')
+  }
+
   opacity(0) // hide browser window as chromium flickers into existence
 
   const browser = await puppeteer.launch({
@@ -46,10 +52,90 @@ const DEVTOOLS = 0
       hasTouch: true
     }
   })
-  const page = await browser.newPage()
-  await page.goto(URI, {
-    timeout: 90000
+
+  const log = Log( (()=>{
+    let currUrl
+    return ({consoleMessage, values}) => {
+      let loc = '', type
+      if (consoleMessage) {
+        type = 'console.' + consoleMessage.type()
+        const {lineNumber, url} = consoleMessage.location()
+        if (url !== currUrl) {
+          console.log('In', url)
+          currUrl = url
+        }
+        if (lineNumber !== undefined) {
+          loc = `:${lineNumber} `
+        }
+        if (!values.length) {
+          values.unshift(consoleMessage.text())
+        }
+      } else {
+        type = values.shift()
+      }
+      console.log(`${loc}[${type}] ${values.map(v=>JSON.stringify(v)).join(' ')}`)
+    }
+  })(), err=>{
+    console.error('log stream ended', err.message)
   })
-  page.bringToFront()
+
+  async function exit(err) {
+    console.error(err.message)
+    try {
+      const page = await browser.newPage()
+      await page.setContent(`<body>${getPageStyles()}<h1>${err.message}</h1></body>`)
+      await page.bringToFront()
+      opacity(90)
+    } catch(e) {}
+    await wait(4)
+    await browser.close()
+    console.log('quitting')
+    log.end()
+    process.exit(1)
+  }
+
+  const page = await browser.newPage()
+  page.on('console', msg => {
+    if (['error', 'warning'].includes(msg.type())) {
+      log.push(msg)
+    }
+  })
+  page.on('pageerror', error => log.push(['pageerror', error.message]))
+  page.on('error', error => log.push(['error', error.message]))
+  page.on('response', response => {
+    const status = response.status()
+    if (status < 200 || status >= 300) {
+      log.push(['http-response', status, response.url()])
+    }
+  })
+  page.on('requestfailed', request => log.push(['request-failed', request.failure().errorText, request.url]))
+  try {
+    const response = await page.goto(URI, {
+      timeout: 90000
+    })
+    if (!response.ok()) {
+      throw new Error(`Server response: ${response.status()} ${response.statusText()}`)
+    }
+    page.bringToFront()
+  } catch(err) {
+    exit(err)
+  }
   setTimeout( ()=> opacity(100), 1000)
-})();
+})()
+
+// -- utils
+
+function wait(s) {
+  return new Promise( resolve => {
+    setTimeout(resolve, s * 1000)
+  })
+}
+
+function getPageStyles() {
+  return `<style>
+    body, html {
+      background-color: #000010;
+      color: #445;
+    }  
+  </style>`
+}

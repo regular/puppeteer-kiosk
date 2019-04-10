@@ -21,7 +21,8 @@
   },
   "homepage": "https://github.com/regular/puppeteer-kiosk#readme",
   "dependencies": {
-    "minimist": "^1.2.0"
+    "minimist": "^1.2.0",
+    "puppeteer-log": "^1.0.0"
   },
   "devDependencies": {
     "jshint": "^2.10.2"
