@@ -3,6 +3,7 @@
 const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
 const Log = require('puppeteer-log')
+const ScreenshotServer = require('../screenshot-server')
 
 const userDataDir = process.env.HOME + '/.config/chromium'
 const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
@@ -121,8 +122,16 @@ const DEVTOOLS = 0
     exit(err)
   }
   setTimeout( ()=> opacity(100), 1000)
-})()
 
+  const port = argv['screenshot-port']
+  ScreenshotServer(page, port, err => {
+    if (err) {
+      return console.error('Screenshot server listen failed:', err.message)
+    }
+    console.log('Screenshot server listens on port', port)
+  })
+})()
+//
 // -- utils
 
 function wait(s) {
