@@ -47,6 +47,7 @@ const DEVTOOLS = 0
     ignoreDefaultArgs: ['--mute-audio'],
     userDataDir,
     devtools: true,
+    handleSIGINT: false,
     defaultViewport: {
       width: argv.vw || 1920,
       height: argv.vh || 1080,
@@ -77,8 +78,18 @@ const DEVTOOLS = 0
       console.log(`${loc}[${type}] ${values.map(v=>JSON.stringify(v)).join(' ')}`)
     }
   })(), err=>{
-    console.error('log stream ended', err.message)
+    console.error('log stream ended', err && err.message)
   })
+
+  console.log('PID', process.pid)
+  process.on('SIGINT', signalHandler)
+    
+  function signalHandler(signal) {
+    console.log('Received signal', signal)
+    const err = new Error(`Received ${signal}`)
+    err.exitCode = 0
+    exit(err)
+  }
 
   async function exit(err) {
     console.error(err.message)
@@ -92,7 +103,9 @@ const DEVTOOLS = 0
     await browser.close()
     console.log('quitting')
     log.end()
-    process.exit(1)
+    let {exitCode} = err
+    if (exitCode == undefined) exitCode = 1
+    process.exit(exitCode)
   }
 
   const page = await browser.newPage()
