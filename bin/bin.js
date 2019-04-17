@@ -47,6 +47,8 @@ const DEVTOOLS = 0
     ignoreDefaultArgs: ['--mute-audio'],
     userDataDir,
     devtools: true,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
     handleSIGINT: false,
     defaultViewport: {
       width: argv.vw || 1920,
@@ -82,7 +84,7 @@ const DEVTOOLS = 0
   })
 
   console.log('PID', process.pid)
-  process.on('SIGINT', signalHandler)
+  process.on('SIGTERM', signalHandler)
     
   function signalHandler(signal) {
     console.log('Received signal', signal)
