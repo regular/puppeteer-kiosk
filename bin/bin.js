@@ -125,7 +125,7 @@ const DEVTOOLS = 0
       log.push(['http-response', status, response.url()])
     }
   })
-  page.on('requestfailed', request => log.push(['request-failed', request.failure().errorText, request.url]))
+  page.on('requestfailed', request => log.push(['request-failed', request.failure().errorText, request.resourceType(), request.url(), request.headers()]))
   try {
     const response = await page.goto(URI, {
       timeout: 90000
