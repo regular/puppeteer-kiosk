@@ -85,6 +85,7 @@ const DEVTOOLS = 0
 
   console.log('PID', process.pid)
   process.on('SIGTERM', signalHandler)
+  process.on('SIGINT', signalHandler)
     
   function signalHandler(signal) {
     console.log('Received signal', signal)
