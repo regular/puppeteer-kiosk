@@ -103,7 +103,11 @@ const DEVTOOLS = 0
       opacity(90)
     } catch(e) {}
     await wait(4)
-    await browser.close()
+    try {
+      await browser.close()
+    } catch(e) {
+      console.error('Failed to close browser:', e.message)
+    }
     console.log('quitting')
     log.end()
     let {exitCode} = err
