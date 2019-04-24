@@ -40,22 +40,28 @@ const DEVTOOLS = 0
 
   opacity(0) // hide browser window as chromium flickers into existence
 
-  const browser = await puppeteer.launch({
-    timeout: 90000,
-    args,
-    headless: false,
-    ignoreDefaultArgs: ['--mute-audio'],
-    userDataDir,
-    devtools: true,
-    handleSIGTERM: false,
-    handleSIGHUP: false,
-    handleSIGINT: false,
-    defaultViewport: {
-      width: argv.vw || 1920,
-      height: argv.vh || 1080,
-      hasTouch: true
-    }
-  })
+  let browser
+  try {
+    browser = await puppeteer.launch({
+      timeout: 120000,
+      args,
+      headless: false,
+      ignoreDefaultArgs: ['--mute-audio'],
+      userDataDir,
+      devtools: true,
+      handleSIGTERM: false,
+      handleSIGHUP: false,
+      handleSIGINT: false,
+      defaultViewport: {
+        width: argv.vw || 1920,
+        height: argv.vh || 1080,
+        hasTouch: true
+      }
+    })
+  } catch(err) {
+    console.error('Failed to launch browser', err.message)
+    process.exit(1)
+  }
 
   const log = Log( (()=>{
     let currUrl
@@ -122,14 +128,38 @@ const DEVTOOLS = 0
     }
   })
   page.on('pageerror', error => log.push(['pageerror', error.message]))
-  page.on('error', error => log.push(['error', error.message]))
+  page.on('error', error => {
+    log.push(['error', error.message])
+    if (err.message == "Page crashed!") {
+      const err = new Error('Chrome process crashed, restarting.')
+      log.push(['puppeteer', err.message])
+      exit(err)
+    }
+  })
   page.on('response', response => {
     const status = response.status()
     if (status < 200 || status >= 300) {
       log.push(['http-response', status, response.url()])
     }
   })
-  page.on('requestfailed', request => log.push(['request-failed', request.failure().errorText, request.resourceType(), request.url(), request.headers()]))
+  page.on('requestfailed', request => {
+    const errorText = request.failure().errorText
+    log.push([
+      'request-failed',
+      errorText,
+      request.resourceType(),
+      request.url(),
+      request.headers()
+    ])
+    if (
+      errorText == "net::ERR_ABORTED" &&
+      request.resourceType() == "image"
+    ) {
+      log.push(['puppeteer', 'failed to load image'])
+    }
+
+  })
+  
   try {
     const response = await page.goto(URI, {
       timeout: 90000
