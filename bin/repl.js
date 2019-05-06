@@ -57,7 +57,7 @@ if (!wsEndpoint) {
   console.log(`attaching to page ${pageIndex}`)
   const page = pages[pageIndex]
 
-  logPageOutput(page, console.log.bind(console))
+  logPageOutput(page, console.error.bind(console))
   repl(page)
 
 })()
