@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 //jshint esversion: 9
+const fs = require('fs')
 const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
 const Log = require('puppeteer-log')
 const ScreenshotServer = require('../screenshot-server')
+
+const runtumeDir = process.env.XDG_RUNTIME_DIR || process.env.HOME
+const wsEndpointFile = `${runtumeDir}/puppeteer-kiosk-ws-endpoint`
 
 const userDataDir = process.env.HOME + '/.config/chromium'
 const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
@@ -89,7 +93,14 @@ const DEVTOOLS = 0
     console.error('log stream ended', err && err.message)
   })
 
-  console.log('PID', process.pid)
+  console.log('puppeteer-kiosk PID', process.pid)
+  console.log('DevTools ws endpoint', browser.wsEndpoint())
+  fs.writeFileSync(wsEndpointFile, browser.wsEndpoint(), {
+    encoding: 'utf8',
+    mode: 0o600
+  })
+
+  console.log('Chrome Version:', await browser.version())
   process.on('SIGTERM', signalHandler)
   process.on('SIGINT', signalHandler)
     
@@ -120,6 +131,10 @@ const DEVTOOLS = 0
     if (exitCode == undefined) exitCode = 1
     process.exit(exitCode)
   }
+
+  browser.on('disconnected', ev =>{
+    exit(new Error('Browser disconnected'))
+  })
 
   const page = await browser.newPage()
   page.on('console', msg => {
@@ -174,12 +189,14 @@ const DEVTOOLS = 0
   setTimeout( ()=> opacity(100), 1000)
 
   const port = argv['screenshot-port']
-  ScreenshotServer(page, port, err => {
-    if (err) {
-      return console.error('Screenshot server listen failed:', err.message)
-    }
-    console.log('Screenshot server listens on port', port)
-  })
+  if (port) {
+    ScreenshotServer(page, port, err => {
+      if (err) {
+        return console.error('Screenshot server listen failed:', err.message)
+      }
+      console.log('Screenshot server listens on port', port)
+    })
+  }
 })()
 //
 // -- utils
