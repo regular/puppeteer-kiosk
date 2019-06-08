@@ -68,7 +68,7 @@ test('Promise resolved', t => {
       path: '/screenshot'
     }, res => {
       t.equal(res.statusCode, 200)
-      console.log(res)
+      //console.log(res)
       t.equal(res.headers['content-type'], 'image/png')
       t.equal(res.headers['content-length'], '3')
       server.close()

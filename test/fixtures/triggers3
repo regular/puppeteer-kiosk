@@ -1,0 +1,6 @@
+trigger console log xxx
+  action log foo bar
+
+trigger console error FATAL
+  action log foo bar
+  action reload

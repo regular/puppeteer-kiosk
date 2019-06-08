@@ -5,12 +5,16 @@ const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
 const Log = require('puppeteer-log')
 const ScreenshotServer = require('../screenshot-server')
+const parseTriggers = require('../triggers')
+const TriggerTypes = require('../trigger-types')
+const Actions = require('../actions')
 
 const runtumeDir = process.env.XDG_RUNTIME_DIR || process.env.HOME
 const wsEndpointFile = `${runtumeDir}/puppeteer-kiosk-ws-endpoint`
 
 const userDataDir = process.env.HOME + '/.config/chromium'
 const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
+const triggerConfigPath = argv.triggers
 
 const URI = argv._[0] || 'about:blank'
 
@@ -173,6 +177,24 @@ const DEVTOOLS = 0
       log.push(['puppeteer', 'failed to load image'])
     }
 
+  })
+
+  parseTriggers(triggerConfigPath, Actions(page, log), TriggerTypes(), (err, trigger) => {
+    if (err) return console.error('Unable to parse trigger config', err.message)
+    const pushable = Log( ({consoleMessage, values}) => {
+      if (!values.length) {
+        values.unshift(consoleMessage.text())
+      }
+      const args = `${consoleMessage.type()} ${values.map(v=>JSON.stringify(v)).join(' ')}`
+      trigger('console', args, err =>{
+        if (err) console.error('failed to run console trigger', err.message)
+      })
+    }, err=>{
+      console.error('trigger console sink ended', err && err.message)
+    })
+    page.on('console', msg => {
+      pushable.push(msg)
+    })
   })
   
   try {

@@ -1,0 +1,2 @@
+trigger MyTrigger foo bar
+  action sound beep beep

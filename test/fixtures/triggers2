@@ -1,0 +1,7 @@
+trigger isTrue
+  action print true
+  action newLine
+
+trigger isFalse
+  action print false
+  action newLine

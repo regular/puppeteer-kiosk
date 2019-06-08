@@ -8,7 +8,7 @@
     "puppeteer-repl": "bin/repl.js"
   },
   "scripts": {
-    "test": "tape test/**"
+    "test": "tape test/**.js"
   },
   "repository": {
     "type": "git",
@@ -24,10 +24,15 @@
   "dependencies": {
     "minimist": "^1.2.0",
     "promptly": "^3.0.3",
-    "puppeteer-log": "^1.0.0"
+    "pull-file": "^1.1.0",
+    "pull-split": "^0.2.0",
+    "pull-stream": "^3.6.12",
+    "pull-utf8-decoder": "^1.0.2",
+    "puppeteer-log": "^1.0.0",
+    "save": "^2.4.0"
   },
   "devDependencies": {
     "jshint": "^2.10.2",
-    "tape": "^4.10.1"
+    "tape": "^4.10.2"
   }
 }
