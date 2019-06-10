@@ -15,6 +15,7 @@ const wsEndpointFile = `${runtumeDir}/puppeteer-kiosk-ws-endpoint`
 const userDataDir = process.env.HOME + '/.config/chromium'
 const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
 const triggerConfigPath = argv.triggers
+const fastExit = argv['fast-exit']
 
 const URI = argv._[0] || 'about:blank'
 
@@ -34,7 +35,11 @@ const DEVTOOLS = 0
       : '--kiosk',
 
     '--disable-pinch',
-    '--overscroll-history-navigation=0',
+
+    '--overscroll-history-navigation=0', // has no effect
+    '--enable-gesture-navigation=0', // has no effect
+    // this si solved with `overscroll-behavior` CSS property
+
     '--noerrdialogs',
     '--start-fullscreen',
     '--disable-infobars',
@@ -123,7 +128,7 @@ const DEVTOOLS = 0
       await page.bringToFront()
       opacity(90)
     } catch(e) {}
-    await wait(4)
+    if (!fastExit) await wait(4)
     try {
       await browser.close()
     } catch(e) {
