@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 //jshint esversion: 9
+const journal = new (require('systemd-journald'))({syslog_identifier: 'puppeteer-kiosk'})
 const fs = require('fs')
 const argv = require('minimist')(process.argv.slice(2))
 const puppeteer = require('puppeteer')
@@ -79,9 +80,11 @@ const DEVTOOLS = 0
   const log = Log( (()=>{
     let currUrl
     return ({consoleMessage, values}) => {
-      let loc = '', type
+      let loc = '', source, prio
       if (consoleMessage) {
-        type = 'console.' + consoleMessage.type()
+        const type = consoleMessage.type()
+        prio = journaldPriorityFromConsoleType(type )
+        source = 'console.' + type
         const {lineNumber, url} = consoleMessage.location()
         if (url !== currUrl) {
           console.log('In', url)
@@ -94,9 +97,15 @@ const DEVTOOLS = 0
           values.unshift(consoleMessage.text())
         }
       } else {
-        type = values.shift()
+        prio = values.shift()
+        source = values.shift()
       }
-      console.log(`${loc}[${type}] ${values.map(v=>JSON.stringify(v)).join(' ')}`)
+      const text=values.map(v=>JSON.stringify(v)).join(' ')
+      journal[prio](text,{
+        CODE_FILE: consoleMessage ? consoleMessage.location().url : undefined,
+        CODE_LINE: consoleMessage ? consoleMessage.location().lineNumber : undefined
+      })
+      console.log(`${loc} ${prio} [${source}] ${text}`)
     }
   })(), err=>{
     console.error('log stream ended', err && err.message)
@@ -151,24 +160,25 @@ const DEVTOOLS = 0
       log.push(msg)
     }
   })
-  page.on('pageerror', error => log.push(['pageerror', error.message]))
+  page.on('pageerror', error => log.push(['err', 'pageerror', error.message]))
   page.on('error', error => {
-    log.push(['error', error.message])
+    log.push(['err', 'onerror', error.message])
     if (err.message == "Page crashed!") {
       const err = new Error('Chrome process crashed, restarting.')
-      log.push(['puppeteer', err.message])
+      log.push(['err', 'puppeteer', err.message])
       exit(err)
     }
   })
   page.on('response', response => {
     const status = response.status()
     if (status < 200 || status >= 300) {
-      log.push(['http-response', status, response.url()])
+      log.push(['notice', 'http-response', status, response.url()])
     }
   })
   page.on('requestfailed', request => {
     const errorText = request.failure().errorText
     log.push([
+      'info',
       'request-failed',
       errorText,
       request.resourceType(),
@@ -179,7 +189,7 @@ const DEVTOOLS = 0
       errorText == "net::ERR_ABORTED" &&
       request.resourceType() == "image"
     ) {
-      log.push(['puppeteer', 'failed to load image'])
+      log.push(['info', 'puppeteer', 'failed to load image'])
     }
 
   })
@@ -241,4 +251,27 @@ function getPageStyles() {
       color: #445;
     }  
   </style>`
+}
+
+function journaldPriorityFromConsoleType(t) {
+  switch(t) {
+    case 'debug':
+      return 'debug'
+    case 'log':
+    case 'dir':
+    case 'info':
+      return 'info'
+    case 'warning':
+      return 'warning'
+    case 'error':
+      return 'err'
+    default:
+      return 'notice'
+  }
+  /* unused journald priorities:
+     - emerg
+     - alert
+     - crit
+     - notice
+  */
 }

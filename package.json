@@ -29,7 +29,8 @@
     "pull-stream": "^3.6.12",
     "pull-utf8-decoder": "^1.0.2",
     "puppeteer-log": "^1.0.0",
-    "save": "^2.4.0"
+    "save": "^2.4.0",
+    "systemd-journald": "^1.5.1"
   },
   "devDependencies": {
     "jshint": "^2.10.2",
