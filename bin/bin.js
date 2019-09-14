@@ -101,7 +101,7 @@ const DEVTOOLS = 0
         prio = values.shift()
         source = values.shift()
       }
-      const text=values.map(v=>JSON.stringify(v)).join(' ')
+      const text=values.map(stringify).join(' ')
       journal[prio](text,{
         CODE_FILE: consoleMessage ? consoleMessage.location().url : undefined,
         CODE_LINE: consoleMessage ? consoleMessage.location().lineNumber : undefined
@@ -131,8 +131,11 @@ const DEVTOOLS = 0
     exit(err)
   }
 
+  let exiting = false
   async function exit(err) {
     console.error(err.message)
+    if (exiting) return
+    exiting = true
     try {
       const page = await browser.newPage()
       await page.setContent(`<body>${getPageStyles()}<h1>${err.message}</h1></body>`)
@@ -196,13 +199,13 @@ const DEVTOOLS = 0
 
   })
 
-  parseTriggers(triggerConfigPath, Actions(page, log), TriggerTypes(), (err, trigger) => {
+  parseTriggers(triggerConfigPath, Actions(page, log, exit), TriggerTypes(), (err, trigger) => {
     if (err) return console.error('Unable to parse trigger config', err.message)
     const pushable = Log( ({consoleMessage, values}) => {
       if (!values.length) {
         values.unshift(consoleMessage.text())
       }
-      const args = `${consoleMessage.type()} ${values.map(v=>JSON.stringify(v)).join(' ')}`
+      const args = `${consoleMessage.type()} ${values.map(stringify).join(' ')}`
       trigger('console', args, err =>{
         if (err) console.error('failed to run console trigger', err.message)
       })
@@ -276,4 +279,10 @@ function journaldPriorityFromConsoleType(t) {
      - crit
      - notice
   */
+}
+
+function stringify(v) {
+  if (typeof v == 'string') return v
+  if (typeof v == 'number' || typeof v == 'boolean') return `${v}`
+  return JSON.stringify(v)
 }
