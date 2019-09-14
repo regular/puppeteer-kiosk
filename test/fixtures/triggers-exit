@@ -1,0 +1,3 @@
+trigger console error Failed to load resource
+  action exit 1 Will not accept lack of an Icon!
+
