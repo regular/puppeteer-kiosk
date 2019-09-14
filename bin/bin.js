@@ -112,20 +112,20 @@ const DEVTOOLS = 0
     console.error('log stream ended', err && err.message)
   })
 
-  journal.info('puppeteer-kiosk PID', process.pid)
-  journal.info('DevTools ws endpoint', browser.wsEndpoint())
+  journal.info(`puppeteer-kiosk PID ${process.pid}`)
+  journal.info(`DevTools ws endpoint: ${browser.wsEndpoint()}`)
   fs.writeFileSync(wsEndpointFile, browser.wsEndpoint(), {
     encoding: 'utf8',
     mode: 0o600
   })
 
-  journal.info('Chrome Version:', await browser.version())
+  journal.info(`Chrome Version: ${await browser.version()}`)
   process.on('SIGTERM', signalHandler)
   process.on('SIGINT', signalHandler)
     
   function signalHandler(signal) {
     console.log('Received signal', signal)
-    journal.notice('Received signal', signal)
+    journal.notice(`Received signal ${signal}`)
     const err = new Error(`Received ${signal}`)
     err.exitCode = 0
     exit(err)
