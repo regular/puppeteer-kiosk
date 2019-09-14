@@ -1,6 +1,6 @@
 {
   "name": "puppeteer-kiosk",
-  "version": "2.15.0",
+  "version": "2.15.1",
   "description": "Wrapper around puppeteer for use in a systemd user service on a kiosk system",
   "main": "index.js",
   "bin": {
