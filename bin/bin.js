@@ -45,6 +45,7 @@ const DEVTOOLS = 0
     '--noerrdialogs',
     '--start-fullscreen',
     '--disable-infobars',
+    '--disable-notifications',
     '--disable-session-crashed-bubble',
     '--password-store=basic'
   ]
@@ -61,7 +62,7 @@ const DEVTOOLS = 0
       timeout: 120000,
       args,
       headless: false,
-      ignoreDefaultArgs: ['--mute-audio'],
+      ignoreDefaultArgs: ['--mute-audio', '--enable-automation'],
       userDataDir,
       devtools: true,
       handleSIGTERM: false,
