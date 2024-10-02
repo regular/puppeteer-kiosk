@@ -1,6 +1,6 @@
 {
   "name": "puppeteer-kiosk",
-  "version": "2.15.1",
+  "version": "3.0.0",
   "description": "Wrapper around puppeteer for use in a systemd user service on a kiosk system",
   "main": "index.js",
   "bin": {
@@ -28,6 +28,7 @@
     "pull-split": "^0.2.0",
     "pull-stream": "^3.6.12",
     "pull-utf8-decoder": "^1.0.2",
+    "puppeteer-core": "^23.4.1",
     "puppeteer-log": "^1.0.0",
     "save": "^2.4.0",
     "systemd-journald": "^1.5.1"

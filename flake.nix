@@ -7,13 +7,41 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        buildInputs = with pkgs; [ 
+          systemd
+          #ungoogled-chromium
+        ];
       in with pkgs; {
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ 
+
+        packages.default = buildNpmPackage rec {
+          name = "puppeteer-kiosk";
+          src = ./.;
+          npmDepsHash = "sha256-s51bKFCFJ220EvweB/RvPuZbeM/Z32orDu84j6HwGUM=";
+
+          dontNpmBuild = true;
+          makeCacheWritable = true;
+
+          inherit buildInputs;
+          nativeBuildInputs = [
             nodejs
-            python3
+            makeWrapper
             pkg-config
+            python3
+          ];
+
+          #postInstall = ''
+          #  wrapProgram $out/bin/puppeteer-kiosk \
+          #  --set puppeteer-kiosk_ ${status-page}
+          #'';
+        };
+
+        devShells.default = pkgs.mkShell {
+          buildInputs = [
+            ungoogled-chromium
             systemd
+            nodejs
+            pkg-config
+            python3
           ];
         };
       }

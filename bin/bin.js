@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 //jshint esversion: 9
+
 const journal = new (require('systemd-journald'))({syslog_identifier: 'puppeteer-kiosk'})
 // NOTE: we assume stderr to go to the journal by means of the systemd unit
 const fs = require('fs')
 const argv = require('minimist')(process.argv.slice(2))
-const puppeteer = require('puppeteer')
+const puppeteer = require('puppeteer-core')
 const Log = require('puppeteer-log')
 const ScreenshotServer = require('../screenshot-server')
 const parseTriggers = require('../triggers')
 const TriggerTypes = require('../trigger-types')
 const Actions = require('../actions')
 
-const runtumeDir = process.env.XDG_RUNTIME_DIR || process.env.HOME
-const wsEndpointFile = `${runtumeDir}/puppeteer-kiosk-ws-endpoint`
+const Logger = require('../lib/logger')
+const {wait, stringify, journaldPriorityFromConsoleType} = require('../lib/util')
+
+const runtimeeDir = process.env.XDG_RUNTIME_DIR || process.env.HOME
+const wsEndpointFile = `${runtimeeDir}/puppeteer-kiosk-ws-endpoint`
 
 const userDataDir = process.env.HOME + '/.config/chromium'
 const opacity = argv['hide-until-loaded'] ? require('../opacity')({userDataDir}) : ()=>{}
@@ -24,13 +28,18 @@ const URI = argv._[0] || 'about:blank'
 const DEVTOOLS = 0
 
 ;(async () => {
-  const args=[
+  const args = [
     '--no-default-browser-check',
     '--disable-features=InfiniteSessionRestore',
     '--no-first-run',
     '--autoplay-policy=no-user-gesture-required',
     '--disable-gesture-requirement-for-media-playback',
     '--use-fake-ui-for-media-stream',
+
+    argv.wayland ? [
+      '--enable-features=UseOzonePlatform',
+      '--ozone-platform=wayland'
+    ] : [],
 
     DEVTOOLS ? 
       '--auto-open-devtools-for-tabs'
@@ -48,7 +57,7 @@ const DEVTOOLS = 0
     '--disable-notifications',
     '--disable-session-crashed-bubble',
     '--password-store=basic'
-  ]
+  ].flat()
 
   if (argv.sandbox == false) {
     args.push('--no-sandbox')
@@ -57,8 +66,17 @@ const DEVTOOLS = 0
   opacity(0) // hide browser window as chromium flickers into existence
 
   let browser
+  const expected_chrome_version  = puppeteer.PUPPETEER_REVISIONS.chrome
+  journal.info(`Supported Chrome version is ${expected_chrome_version}`)
+  const {executablePath} = argv
+  if (!executablePath) {
+    console.error('Must specify --executablePath')
+    process.exit(1)
+  }
+  journal.info(`Chrome Executable Path is ${executablePath}`)
   try {
     browser = await puppeteer.launch({
+      executablePath,
       timeout: 120000,
       args,
       headless: false,
@@ -79,48 +97,15 @@ const DEVTOOLS = 0
     process.exit(1)
   }
 
-  const log = Log( (()=>{
-    let currUrl
-    return ({consoleMessage, values}) => {
-      let loc = '', source, prio
-      if (consoleMessage) {
-        const type = consoleMessage.type()
-        prio = journaldPriorityFromConsoleType(type )
-        source = 'console.' + type
-        const {lineNumber, url} = consoleMessage.location()
-        if (url !== currUrl) {
-          console.log('In', url)
-          currUrl = url
-        }
-        if (lineNumber !== undefined) {
-          loc = `:${lineNumber} `
-        }
-        if (!values.length) {
-          values.unshift(consoleMessage.text())
-        }
-      } else {
-        prio = values.shift()
-        source = values.shift()
-      }
-      const text=values.map(stringify).join(' ')
-      journal[prio](text,{
-        CODE_FILE: consoleMessage ? consoleMessage.location().url : undefined,
-        CODE_LINE: consoleMessage ? consoleMessage.location().lineNumber : undefined
-      })
-      console.log(`${loc} ${prio} [${source}] ${text}`)
-    }
-  })(), err=>{
-    console.error('log stream ended', err && err.message)
-  })
-
+  journal.info(`Chrome Version: ${await browser.version()}`)
   journal.info(`puppeteer-kiosk PID ${process.pid}`)
   journal.info(`DevTools ws endpoint: ${browser.wsEndpoint()}`)
+
   fs.writeFileSync(wsEndpointFile, browser.wsEndpoint(), {
     encoding: 'utf8',
     mode: 0o600
   })
 
-  journal.info(`Chrome Version: ${await browser.version()}`)
   process.on('SIGTERM', signalHandler)
   process.on('SIGINT', signalHandler)
     
@@ -133,6 +118,7 @@ const DEVTOOLS = 0
   }
 
   let exiting = false
+  let logger = Logger(journalOutput, {location: true})
   async function exit(err) {
     console.error(err.message)
     if (exiting) return
@@ -150,7 +136,7 @@ const DEVTOOLS = 0
       console.error('Failed to close browser:', e.message)
     }
     console.log('quitting')
-    log.end()
+    logger.end()
     let {exitCode} = err
     if (exitCode == undefined) exitCode = 1
     process.exit(exitCode)
@@ -161,46 +147,16 @@ const DEVTOOLS = 0
   })
 
   const page = await browser.newPage()
-  page.on('console', msg => {
-    if (['error', 'warning'].includes(msg.type())) {
-      log.push(msg)
-    }
-  })
-  page.on('pageerror', error => log.push(['err', 'pageerror', error.message]))
-  page.on('error', error => {
-    log.push(['err', 'onerror', error.message])
+  logger.attach(page)
+
+  page.on('error', err => {
     if (err.message == "Page crashed!") {
       const err = new Error('Chrome process crashed, restarting.')
-      log.push(['err', 'puppeteer', err.message])
       exit(err)
     }
   })
-  page.on('response', response => {
-    const status = response.status()
-    if (status < 200 || status >= 300) {
-      log.push(['notice', 'http-response', status, response.url()])
-    }
-  })
-  page.on('requestfailed', request => {
-    const errorText = request.failure().errorText
-    log.push([
-      'info',
-      'request-failed',
-      errorText,
-      request.resourceType(),
-      request.url(),
-      request.headers()
-    ])
-    if (
-      errorText == "net::ERR_ABORTED" &&
-      request.resourceType() == "image"
-    ) {
-      log.push(['info', 'puppeteer', 'failed to load image'])
-    }
 
-  })
-
-  parseTriggers(triggerConfigPath, Actions(page, log, exit), TriggerTypes(), (err, trigger) => {
+  parseTriggers(triggerConfigPath, Actions(page, logger, exit), TriggerTypes(), (err, trigger) => {
     if (err) return console.error('Unable to parse trigger config', err.message)
     const pushable = Log( ({consoleMessage, values}) => {
       if (!values.length) {
@@ -219,10 +175,11 @@ const DEVTOOLS = 0
   })
   
   try {
+    console.error('Navigating to', URI)
     const response = await page.goto(URI, {
       timeout: 90000
     })
-    if (!response.ok()) {
+    if (response && !response.ok()) {
       throw new Error(`Server response: ${response.status()} ${response.statusText()}`)
     }
     page.bringToFront()
@@ -241,14 +198,9 @@ const DEVTOOLS = 0
     })
   }
 })()
-//
-// -- utils
 
-function wait(s) {
-  return new Promise( resolve => {
-    setTimeout(resolve, s * 1000)
-  })
-}
+
+// -- utils
 
 function getPageStyles() {
   return `<style>
@@ -259,31 +211,14 @@ function getPageStyles() {
   </style>`
 }
 
-function journaldPriorityFromConsoleType(t) {
-  switch(t) {
-    case 'debug':
-      return 'debug'
-    case 'log':
-    case 'dir':
-    case 'info':
-      return 'info'
-    case 'warning':
-      return 'warning'
-    case 'error':
-      return 'err'
-    default:
-      return 'notice'
+function journalOutput({type, text, file, line, prio}) {
+  prio = prio || journaldPriorityFromConsoleType(type)
+  if (journal[prio] == undefined) {
+    console.error(`Invalid log prio: "${prio}" for log entry ${text}\nsourc=${source}`)
+    return
   }
-  /* unused journald priorities:
-     - emerg
-     - alert
-     - crit
-     - notice
-  */
-}
-
-function stringify(v) {
-  if (typeof v == 'string') return v
-  if (typeof v == 'number' || typeof v == 'boolean') return `${v}`
-  return JSON.stringify(v)
+  journal[prio](text,{
+    CODE_FILE: file,
+    CODE_LINE: line
+  })
 }
