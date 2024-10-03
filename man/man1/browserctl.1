@@ -1,0 +1,337 @@
+.TH BROWSERCTL 1 "October 2023" "Browserctl Manual"
+.SH NAME
+browserctl \- command-line browser page control utility modeled after tmux
+.SH SYNOPSIS
+.B browserctl
+.RI [ global-options ]
+.IR command
+.RI [ command-options ]
+.RI [ command-target ]
+.SH DESCRIPTION
+\fBbrowserctl\fR is a command-line utility that allows you to control browser pages (tabs) directly from the terminal. It enables you to create, list, select, and manipulate pages, evaluate JavaScript code in the context of a page, bring pages to the foreground, and more.
+
+The syntax and philosophy of \fBbrowserctl\fR are modeled after \fBtmux\fR but focused solely on page objects. Pages can be addressed by ID, name (\fIdocument.title\fR), or URL, with support for partial matches when unique.
+
+The control socket is a WebSocket, and the protocol used is the Chrome DevTools Protocol (CDP).
+
+.SH GLOBAL OPTIONS
+.TP
+.B \-S \fIsocket-path\fR
+Use the specified full path for the browser control socket.
+
+Example:
+.EX
+browserctl \-S /tmp/mybrowsersocket <command>
+.EE
+
+.TP
+.B \-L \fIsocket-name\fR
+Use the specified socket name. The socket path becomes \fI/tmp/browserctl\-<uid>/socket\-name\fR, where \fI<uid>\fR is your user ID.
+
+Example:
+.EX
+browserctl \-L mysocket <command>
+.EE
+
+.PP
+\fBNote:\fR The \fI<uid>\fR in the socket path refers to your user ID on the system. This ensures that the socket is unique to your user account, preventing conflicts with other users.
+
+.TP
+.B \-h\fR, \fB\-\-help
+Display help message and exit.
+
+.TP
+.B \-V\fR, \fB\-\-version
+Display version information and exit.
+
+.SH COMMANDS
+.SS "Page Commands"
+.TP
+.B new\-page
+.RI [ \-n\ \fIpage-name\fR ] [ \-u\ \fIURL\fR ]
+Create a new page (tab), optionally with a name and URL.
+
+Example:
+.EX
+browserctl new\-page \-n "My Page" \-u https://example.com
+.EE
+
+.TP
+.B list\-pages
+List all open pages, displaying their IDs, names (titles), and URLs.
+
+Example:
+.EX
+browserctl list\-pages
+.EE
+
+.TP
+.B kill\-page
+.RI [ \-t\ \fItarget-page\fR ]
+Close the specified page.
+
+Example:
+.EX
+browserctl kill\-page \-t 3
+.EE
+
+.TP
+.B rename\-page
+.RI [ \-t\ \fItarget-page\fR ] \fInew-name\fR
+Rename the specified page.
+
+Example:
+.EX
+browserctl rename\-page \-t "Old Title" "New Title"
+.EE
+
+.TP
+.B select\-page
+.RI [ \-t\ \fItarget-page\fR ]
+Bring the specified page to the foreground.
+
+Example:
+.EX
+browserctl select\-page \-t "https://example.com"
+.EE
+
+.SS "JavaScript Evaluation Commands"
+.TP
+.B eval
+.RI [ \-t\ \fItarget-page\fR ] [ \-p ] [ \-f ] \fIjavascript\fR
+Evaluate JavaScript code in the context of the specified page.
+
+Options:
+.RS
+.IP \-p
+Print the result of the evaluation.
+
+.IP \-f
+Read JavaScript code from standard input (stdin).
+.RE
+
+Examples:
+.EX
+browserctl eval \-t 3 \-p 'document.title'
+.EE
+
+.EX
+echo 'alert(document.title);' | browserctl eval \-t "google.com" \-f
+.EE
+
+.TP
+.B run
+.RI [ \-u\ \fIURL\fR ] [ \-p ] [ \-f ] \fIjavascript\fR
+Open a temporary page, optionally load a URL, evaluate JavaScript code, then close the page.
+
+Options:
+.RS
+.IP \-p
+Print the result of the evaluation.
+
+.IP \-f
+Read JavaScript code from standard input (stdin).
+.RE
+
+Example:
+.EX
+browserctl run \-u https://example.com \-p 'console.log(document.title);'
+.EE
+
+.SH COMMAND TARGETS
+Pages can be addressed using:
+
+.IP \[bu] 2
+\fIID\fR: A unique numerical identifier assigned to each page.
+
+.IP \[bu] 2
+\fIName\fR: The \fIdocument.title\fR of the page.
+
+.IP \[bu] 2
+\fIURL\fR: The full URL of the page.
+
+.IP \[bu] 2
+\fIPartial Name or URL\fR: A unique substring of the name or URL.
+
+When using partial matches, the string must uniquely identify a single page; otherwise, an error will be returned.
+
+.SS "Addressing Examples"
+.TP
+.B By ID:
+.EX
+\-t 5
+.EE
+
+.TP
+.B By Name (Title):
+.EX
+\-t "My Page Title"
+.EE
+
+.TP
+.B By URL:
+.EX
+\-t "https://example.com/path"
+.EE
+
+.TP
+.B By Partial Name or URL:
+If the substring uniquely matches one page:
+.EX
+\-t "google.com"
+.EE
+
+\fBNote:\fR If multiple pages match, an error will occur prompting you to specify a more precise target.
+
+.SS "Special Symbols"
+.TP
+.B \^
+First page (lowest ID).
+
+Example:
+.EX
+\-t \^
+.EE
+
+.TP
+.B \$
+Last page (highest ID).
+
+Example:
+.EX
+\-t \$
+.EE
+
+.TP
+.B \+
+Next page.
+
+Example:
+.EX
+\-t \+
+.EE
+
+.TP
+.B \-
+Previous page.
+
+Example:
+.EX
+\-t \-
+.EE
+
+.TP
+.B \!
+Last (previously active) page.
+
+Example:
+.EX
+\-t \!
+.EE
+
+.SH EXAMPLES
+.TP
+1. Create a new page with a URL and name:
+.EX
+browserctl new\-page \-n "My Example Page" \-u https://example.com
+.EE
+
+.TP
+2. List all open pages:
+.EX
+browserctl list\-pages
+.EE
+
+Sample output:
+.EX
+ID   Name                URL
+1    Google              https://www.google.com
+2    My Example Page     https://example.com
+3    Untitled            about:blank
+.EE
+
+.TP
+3. Select a page by partial URL:
+
+If only one page's URL contains "google.com":
+.EX
+browserctl select\-page \-t "google.com"
+.EE
+
+.TP
+4. Evaluate JavaScript in a page by name and print the result:
+.EX
+browserctl eval \-t "Google" \-p 'document.title'
+.EE
+
+.TP
+5. Evaluate JavaScript from stdin:
+.EX
+echo 'alert(document.title);' | browserctl eval \-t 3 \-f
+.EE
+
+.TP
+6. Close a page by ID:
+.EX
+browserctl kill\-page \-t 2
+.EE
+
+.TP
+7. Rename a page using partial name:
+
+If "Untitled" uniquely identifies a page:
+.EX
+browserctl rename\-page \-t "Untitled" "New Page Name"
+.EE
+
+.TP
+8. Run JavaScript on a temporary page and close it, reading code from stdin:
+.EX
+echo 'console.log("Page Loaded");' | browserctl run \-u https://example.com \-f
+.EE
+
+.TP
+9. Bring the last page to the foreground:
+.EX
+browserctl select\-page \-t \$
+.EE
+
+.SH "SOCKET PATH AND USER ID"
+The \fI<uid>\fR in the socket path refers to your \fBuser ID\fR on the system. This ensures that the socket is unique to your user account, preventing conflicts with other users.
+
+For example, when using the \fB\-L\fR option:
+.EX
+browserctl \-L mysocket <command>
+.EE
+
+The socket path becomes:
+.EX
+/tmp/browserctl\-<uid>/mysocket
+.EE
+
+If your user ID is \fB1000\fR, the socket path would be:
+.EX
+/tmp/browserctl\-1000/mysocket
+.EE
+
+The socket is a WebSocket, and the protocol used is the Chrome DevTools Protocol (CDP).
+
+.SH "NOTES ON ADDRESSING PAGES"
+.IP \[bu] 2
+\fBUniqueness Required:\fR When using partial names or URLs, the provided string must uniquely match a single page. If multiple pages match, an error will prompt you to refine your target.
+
+.IP \[bu] 2
+\fBCase Sensitivity:\fR Targets are case-insensitive by default, but this behavior can be configured if needed.
+
+.IP \[bu] 2
+\fBID Assignment:\fR Page IDs are automatically assigned and incremented as pages are created. They are unique during the session.
+
+.SH "SEE ALSO"
+.B tmux(1)
+\- terminal multiplexer with similar syntax and philosophy.
+
+.SH AUTHOR
+Written by [Your Name].
+
+.SH COPYRIGHT
+\fBbrowserctl\fR is a hypothetical utility inspired by \fBtmux\fR for controlling browser pages via the command line.

@@ -29,6 +29,12 @@
             python3
           ];
 
+          postInstall = ''
+            # Install the man page
+            mkdir -p $out/share/man/man1
+            cp man/man1/browserctl.1 $out/share/man/man1/
+          '';
+
           #postInstall = ''
           #  wrapProgram $out/bin/puppeteer-kiosk \
           #  --set puppeteer-kiosk_ ${status-page}
