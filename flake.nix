@@ -16,7 +16,7 @@
         packages.default = buildNpmPackage rec {
           name = "puppeteer-kiosk";
           src = ./.;
-          npmDepsHash = "sha256-s51bKFCFJ220EvweB/RvPuZbeM/Z32orDu84j6HwGUM=";
+          npmDepsHash = "sha256-w1/zGPCS1tCpu0RFF3B17SGWlAxziQjzGMjrkEjLlZA=";
 
           dontNpmBuild = true;
           makeCacheWritable = true;

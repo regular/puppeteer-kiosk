@@ -1,0 +1,23 @@
+{
+  "name": "pull-unix",
+  "version": "1.0.0",
+  "main": "client.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "Jan Bölsche <jan@lagomorph.de> (http://regular.codes/)",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "debug": "^4.3.7",
+    "once": "^1.4.0",
+    "pull-defer": "^0.2.3",
+    "stream-to-pull-stream": "^1.7.3"
+  },
+  "devDependencies": {
+    "pull-stream": "^3.7.0",
+    "tape": "^5.9.0"
+  }
+}

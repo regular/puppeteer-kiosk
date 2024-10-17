@@ -22,15 +22,21 @@
   },
   "homepage": "https://github.com/regular/puppeteer-kiosk#readme",
   "dependencies": {
+    "bl": "^6.0.16",
     "minimist": "^1.2.0",
+    "muxrpc": "^8.0.0",
+    "once": "^1.4.0",
     "promptly": "^3.0.3",
+    "pull-defer": "^0.2.3",
     "pull-file": "^1.1.0",
+    "pull-pushable": "^2.2.0",
     "pull-split": "^0.2.0",
     "pull-stream": "^3.6.12",
     "pull-utf8-decoder": "^1.0.2",
     "puppeteer-core": "^23.4.1",
     "puppeteer-log": "^1.0.0",
     "save": "^2.4.0",
+    "stream-to-pull-stream": "^1.7.3",
     "systemd-journald": "^1.5.1"
   },
   "devDependencies": {

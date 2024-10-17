@@ -1,10 +1,34 @@
-// browserctl-module.js
-
 const bl = require('bl') // BufferList for reading stdin
+const pull = require('pull-stream')
 const debug = require('debug')('browserctl')
+const {promisify} = require('util')
 
 module.exports = async function(browser, argv) {
-  const command = argv[0]
+  browser = (function (b) {
+    return {
+      eval: b.eval,
+      setActivePage: promisify(b.setActivePage),
+      getActivePage: promisify(b.getActivePage),
+      newPage: promisify(b.newPage),
+      closePage: promisify(b.closePage),
+      close: promisify(cb=>{
+        b.close(err=>cb(err==true ? null : err)
+      )}),
+      getPages: function() {
+        return new Promise( (resolve, reject)=>{
+          pull(
+            b.getPages(),
+            pull.collect( (err, result)=>{
+              if (err) return reject(err)
+              resolve(result)
+            })
+          )
+        })
+      }
+    }
+  })(browser)
+
+  const command = argv._[0]
 
   if (!command) {
     throw new Error('No command specified')
@@ -17,13 +41,24 @@ module.exports = async function(browser, argv) {
     'kill-page': killPage,
     'rename-page': renamePage,
     'select-page': selectPage,
+    'active-page': activePage,
     'eval': evalJS,
     'run': runJS,
   }
 
   // Execute the command with a consistent function signature
   if (typeof commands[command] === 'function') {
-    return commands[command](argv)
+    try {
+      const ret = await commands[command](argv)
+      console.log(ret)
+    } catch(err) {
+      console.error(err.message)
+    }
+    try {
+      await browser.close()
+    } catch(err) {
+      console.error('error closing rpc:', err.message)
+    }
   } else {
     throw new Error(`Unknown command: ${command}`)
   }
@@ -31,17 +66,20 @@ module.exports = async function(browser, argv) {
   // Command implementations
 
   async function newPage(argv) {
-    const url = argv.includes('-u') ? argv[argv.indexOf('-u') + 1] : 'about:blank'
-    const pageName = argv.includes('-n') ? argv[argv.indexOf('-n') + 1] : null
+    const url = argv.u || 'about:blank'
+    const {select} = argv
+    const pageName = argv.n
 
     try {
-      const page = await browser.newPage(url)
+      const page = await browser.newPage({
+        url,
+        background: !select
+      })
       if (pageName) {
         await page.evaluate(title => {
           document.title = title
         }, pageName)
       }
-      await browser.setActivePage(page)
       debug('New page created')
     } catch (err) {
       throw new Error(`Failed to create new page: ${err.message}`)
@@ -50,29 +88,26 @@ module.exports = async function(browser, argv) {
 
   async function listPages() {
     const pageList = await browser.getPages()
+    pageList.sort( (a,b)=>a.humanId - b.humanId )
     const activePage = await browser.getActivePage()
-    const pagesInfo = []
     for (let i = 0; i < pageList.length; i++) {
       const page = pageList[i]
       try {
-        const title = await page.title()
-        const url = page.url()
-        const isActive = page === activePage
-        pagesInfo.push({ id: i, title, url, isActive })
-        debug(`Page ${i}: ${title} ${url} ${isActive ? '(active)' : ''}`)
+        const {title, url, humanId} = page
+        const isActive = page.targetId === activePage.targetId
+        console.log(`Page ${humanId}: ${title} ${url} ${isActive ? '(active)' : ''}`)
       } catch (err) {
         debug(`Error retrieving info for page ${i}: ${err.message}`)
       }
     }
-    return pagesInfo
   }
 
   async function killPage(argv) {
-    const target = argv.includes('-t') ? argv[argv.indexOf('-t') + 1] : null
+    const target = argv.t
     try {
       const page = await findPage(target)
-      await page.close()
-      debug('Page closed successfully')
+      await browser.closePage(page)
+      debug('Page %d closed', page.humanId)
     } catch (err) {
       throw new Error(`Failed to close page: ${err.message}`)
     }
@@ -95,35 +130,59 @@ module.exports = async function(browser, argv) {
     }
   }
 
+  async function activePage(argv) {
+    const target = argv.t
+    try {
+      const result = await browser.getActivePage()
+      debug('Active page: %O', result)
+      console.log(result.humanId)
+    } catch (err) {
+      throw new Error(`Failed to determine whether page is visible: ${err.message}`)
+    }
+  }
+
   async function selectPage(argv) {
-    const target = argv.includes('-t') ? argv[argv.indexOf('-t') + 1] : null
+    const target = argv.t
     try {
       const page = await findPage(target)
       await browser.setActivePage(page)
-      //await page.bringToFront()
       debug('Page brought to foreground')
     } catch (err) {
       throw new Error(`Failed to select page: ${err.message}`)
     }
   }
 
-   async function evalJS(argv) {
-    const target = argv.includes('-t') ? argv[argv.indexOf('-t') + 1] : null
-    const printResult = argv.includes('-p')
+  async function evalJS(argv) {
+    const page = await findPage(argv.t)
     const jsCode = await getJavaScriptCode(argv)
     if (!jsCode) {
       throw new Error('No JavaScript code provided')
     }
-    try {
-      const page = await findPage(target)
-      const result = await page.evaluate(new Function(jsCode))
-      if (printResult) {
-        debug(`JavaScript Evaluation Result: ${result}`)
-        return result
-      }
-    } catch (err) {
-      throw new Error(`Failed to evaluate JavaScript: ${err.message}`)
-    }
+    return new Promise( (resolve, reject)=>{
+      pull(
+        browser.eval(page, jsCode),
+        pull.drain(msg=>{
+          //console.log(msg)
+          if (msg.type !== undefined) {
+            if (msg.type == 'log') {
+              console.log(msg.text)
+            } else {
+              console.error(msg.text)
+            }
+          }
+          if (msg.source == 'page.evaluate') {
+            if (msg.prio == 'exception') {
+              reject(new Error(msg.text))
+            } else if (msg.prio == 'result') {
+              resolve(msg.text)
+            }
+          }
+        }, err=>{
+          if (err && err !== true) return reject(new Error(`Failed to evaluate JavaScript: ${err.message}\n${err.stack}`))
+          //resolve(null)
+        })
+      )
+    })
   }
 
   async function runJS(argv) {
@@ -136,7 +195,7 @@ module.exports = async function(browser, argv) {
     let page
     try {
       page = await browser.newPage(url)
-      const result = await page.evaluate((jsCode)
+      const result = await page.evaluate(jsCode)
       if (printResult) {
         debug(`JavaScript Run Result: ${result}`)
         console.log(result)
@@ -154,8 +213,13 @@ module.exports = async function(browser, argv) {
   // Utility functions
 
   async function findPage(target) {
-    const pageList = await browser.getPages()
-    if (!target) {
+    if (target !== undefined) {
+      // Try to parse as ID
+      const id = parseInt(target, 10)
+      if (!isNaN(id) && id >= 0) {
+        return {humanId: id}
+      }
+    } else {
       const activePage = await browser.getActivePage()
       if (activePage) {
         return activePage
@@ -165,42 +229,29 @@ module.exports = async function(browser, argv) {
     }
 
     // Handle special symbols
+    const pageList = await browser.getPages()
     switch (target) {
       case '^':
-        const firstPage = pageList[0]
-        await browser.setActivePage(firstPage)
-        return firstPage
+        return pageList[0]
       case '$':
-        const lastPage = pageList[pageList.length - 1]
-        await browser.setActivePage(lastPage)
-        return lastPage
+        return pageList[pageList.length - 1]
       case '+':
         return getRelativePage(1)
       case '-':
         return getRelativePage(-1)
       case '!':
         const lastActivePage = await browser.getLastActivePage()
-        if (lastActivePage) {
-          await browser.setActivePage(lastActivePage)
+        if (lastActivePage !== undefined) {
           return lastActivePage
         } else {
           throw new Error('No last active page available')
         }
     }
 
-    // Try to parse as ID
-    const id = parseInt(target, 10)
-    if (!isNaN(id) && id >= 0 && id < pageList.length) {
-      const page = pageList[id]
-      await browser.setActivePage(page)
-      return page
-    }
-
     // Search by title or URL
     const matches = await searchPagesByTitleOrURL(target, pageList)
 
     if (matches.length === 1) {
-      await browser.setActivePage(matches[0])
       return matches[0]
     } else if (matches.length === 0) {
       throw new Error(`No page found matching "${target}"`)
@@ -212,13 +263,13 @@ module.exports = async function(browser, argv) {
   async function getRelativePage(offset) {
     const pageList = await browser.getPages()
     const activePage = await browser.getActivePage()
-    const index = pageList.indexOf(activePage)
+    const entry = pageList.find(p=>p.targetId == activePage.targetId)
+    const index = pageList.indexOf(entry)
     if (index === -1) {
       throw new Error('Active page not found')
     }
     const newIndex = (index + offset + pageList.length) % pageList.length
     const newPage = pageList[newIndex]
-    await browser.setActivePage(newPage)
     return newPage
   }
 
@@ -226,8 +277,7 @@ module.exports = async function(browser, argv) {
     const matches = []
     for (const page of pageList) {
       try {
-        const title = await page.title()
-        const url = page.url()
+        const {title, url} = page
         if (
           title.toLowerCase().includes(target.toLowerCase()) ||
           url.toLowerCase().includes(target.toLowerCase())
@@ -244,8 +294,8 @@ module.exports = async function(browser, argv) {
   async function getJavaScriptCode(argv) {
     if (argv.f) {
       return readStdin()
-    } else if (argv[1]) {
-      return argv[1]
+    } else if (argv._[1]) {
+      return argv._[1]
     } else {
       return null
     }
