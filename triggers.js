@@ -2,8 +2,39 @@ const pull = require('pull-stream')
 const file = require('pull-file')
 const split = require('pull-split')
 const utf8 = require('pull-utf8-decoder')
+const Log = require('puppeteer-log')
 
-module.exports = function(filename, makeAction, makeTrigger, cb) {
+const TriggerTypes = require('./trigger-types')
+
+module.exports = {
+  attachTriggers,
+  parseTriggers
+}
+
+async function attachTriggers(page, triggerConfigPath, actions) {
+  let trigger
+  try {
+    trigger = await promisify(parseTriggers)(triggerConfigPath, actions, TriggerTypes())
+  } catch (err) {
+    return console.error('Unable to parse trigger config', err.message)
+  }
+  const pushable = Log( ({consoleMessage, values}) => {
+    if (!values.length) {
+      values.unshift(consoleMessage.text())
+    }
+    const args = `${consoleMessage.type()} ${values.map(stringify).join(' ')}`
+    trigger('console', args, err =>{
+      if (err) console.error('failed to run console trigger', err.message)
+    })
+  }, err=>{
+    console.error('trigger console sink ended', err && err.message)
+  })
+  page.on('console', msg => {
+    pushable.push(msg)
+  })
+}
+
+function parseTriggers(filename, makeAction, makeTrigger, cb) {
   let trigger
   const triggers = []
 
