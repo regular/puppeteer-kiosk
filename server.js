@@ -4,6 +4,7 @@
 // NOTE: we assume stderr to go to the journal by means of the systemd unit
 
 const journal = new (require('systemd-journald'))({syslog_identifier: 'browserctl'})
+const sdnotify = require('sd-notify')
 const puppeteer = require('puppeteer-core')
 const debug = require('debug')('browserctl:bin')
 
@@ -67,7 +68,7 @@ module.exports = async function server(argv) {
   const socketServer = await UnixSocketAPI(browser, unixSocketPath, err=>{
     if (err) return exit(err) 
     console.error('Unix control socket:', unixSocketPath)
-    // TODO: systemd notify
+    sdnotify.ready()
   })
 
   // there always is one tab open

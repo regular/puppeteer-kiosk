@@ -42,8 +42,7 @@ module.exports = async function(browser, argv) {
     'rename-page': renamePage,
     'select-page': selectPage,
     'active-page': activePage,
-    'eval': evalJS,
-    'run': runJS,
+    'eval': evalJS
   }
 
   // Execute the command with a consistent function signature
@@ -81,6 +80,7 @@ module.exports = async function(browser, argv) {
         }, pageName)
       }
       debug('New page created')
+      return page.humanId
     } catch (err) {
       throw new Error(`Failed to create new page: ${err.message}`)
     }
@@ -114,16 +114,15 @@ module.exports = async function(browser, argv) {
   }
 
   async function renamePage(argv) {
-    const target = argv.includes('-t') ? argv[argv.indexOf('-t') + 1] : null
-    const newName = argv[1] || null
+    const newName = encodeURIComponent(argv._[1] || '')
     if (!newName) {
       throw new Error('No new name specified')
     }
+    const target = argv.t
     try {
       const page = await findPage(target)
-      await page.evaluate(title => {
-        document.title = title
-      }, newName)
+      const jsCode = `document.title = '${newName}'`
+      return evalWithConsole(page, jsCode)
       debug('Page renamed successfully')
     } catch (err) {
       throw new Error(`Failed to rename page: ${err.message}`)
@@ -158,56 +157,7 @@ module.exports = async function(browser, argv) {
     if (!jsCode) {
       throw new Error('No JavaScript code provided')
     }
-    return new Promise( (resolve, reject)=>{
-      pull(
-        browser.eval(page, jsCode),
-        pull.drain(msg=>{
-          //console.log(msg)
-          if (msg.type !== undefined) {
-            if (msg.type == 'log') {
-              console.log(msg.text)
-            } else {
-              console.error(msg.text)
-            }
-          }
-          if (msg.source == 'page.evaluate') {
-            if (msg.prio == 'exception') {
-              reject(new Error(msg.text))
-            } else if (msg.prio == 'result') {
-              resolve(msg.text)
-            }
-          }
-        }, err=>{
-          if (err && err !== true) return reject(new Error(`Failed to evaluate JavaScript: ${err.message}\n${err.stack}`))
-          //resolve(null)
-        })
-      )
-    })
-  }
-
-  async function runJS(argv) {
-    const url = argv.u || 'about:blank'
-    const printResult = argv.p
-    const jsCode = await getJavaScriptCode(argv)
-    if (!jsCode) {
-      throw new Error('No JavaScript code provided')
-    }
-    let page
-    try {
-      page = await browser.newPage(url)
-      const result = await page.evaluate(jsCode)
-      if (printResult) {
-        debug(`JavaScript Run Result: ${result}`)
-        console.log(result)
-        return result
-      }
-    } catch (err) {
-      throw new Error(`Failed to run JavaScript: ${err.message}`)
-    } finally {
-      if (page) {
-        await page.close()
-      }
-    }
+    return evalWithConsole(page, jsCode)
   }
 
   // Utility functions
@@ -307,6 +257,37 @@ module.exports = async function(browser, argv) {
         bl((err, data) => {
           if (err) return reject(err)
           resolve(data.toString('utf8'))
+        })
+      )
+    })
+  }
+
+  function evalWithConsole(page, jsCode, opts) {
+    opts = opts || {}
+    const consoleLog = opts.consoleLog || console.log.bind(console)
+    const consoleError = opts.consoleError || console.error.bind(console)
+
+    return new Promise( (resolve, reject)=>{
+      pull(
+        browser.eval(page, jsCode),
+        pull.drain(msg=>{
+          //console.log(msg)
+          if (msg.type !== undefined) {
+            if (msg.type == 'log') {
+              consoleLog(msg.text)
+            } else {
+              consoleError(msg.text)
+            }
+          }
+          if (msg.source == 'page.evaluate') {
+            if (msg.prio == 'exception') {
+              reject(new Error(msg.text))
+            } else if (msg.prio == 'result') {
+              resolve(msg.text)
+            }
+          }
+        }, err=>{
+          if (err && err !== true) return reject(new Error(`Failed to evaluate JavaScript: ${err.message}\n${err.stack}`))
         })
       )
     })

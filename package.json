@@ -36,6 +36,7 @@
     "puppeteer-core": "^23.4.1",
     "puppeteer-log": "^1.0.0",
     "save": "^2.4.0",
+    "sd-notify": "^2.8.0",
     "stream-to-pull-stream": "^1.7.3",
     "systemd-journald": "^1.5.1"
   },

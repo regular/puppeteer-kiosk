@@ -3,7 +3,12 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, ... }:
+  {
+    homeManagerModules = {
+      default = ./service.nix;
+    };
+  } //
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -14,9 +19,9 @@
       in with pkgs; {
 
         packages.default = buildNpmPackage rec {
-          name = "puppeteer-kiosk";
+          name = "browserctl";
           src = ./.;
-          npmDepsHash = "sha256-w1/zGPCS1tCpu0RFF3B17SGWlAxziQjzGMjrkEjLlZA=";
+          npmDepsHash = "sha256-Fnwv21iMq9dnX+TNqokP8oN10/OOJB47hwhFuJz/+DY=";
 
           dontNpmBuild = true;
           makeCacheWritable = true;
@@ -36,8 +41,8 @@
           '';
 
           #postInstall = ''
-          #  wrapProgram $out/bin/puppeteer-kiosk \
-          #  --set puppeteer-kiosk_ ${status-page}
+          #  wrapProgram $out/bin/browserctl \
+          #  --set browserctl_executable-path ${browserPkg}
           #'';
         };
 

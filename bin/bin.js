@@ -7,7 +7,7 @@ const client = require('../browserctl')
 const SocketClient = require('../pull-unix/client')
 const manifest = require('../manifest')
 
-if (argv._[0] == 'server') {
+if (argv._[0] == 'new') {
   server(argv)
 } else {
   const rpc = runMuxrpc(argv)
